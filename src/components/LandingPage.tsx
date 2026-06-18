@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { submitLandingLead } from '../lib/supabase'
 
 function ExternalLinkIcon() {
   return (
@@ -74,23 +75,43 @@ export function Header() {
 const PROFILE_IMAGE =
   'https://lh3.googleusercontent.com/aida-public/AB6AXuBMzrNQKU55lPXQ3rEW6aG8xVEYHMRpb2Xa-ooUK0OF9pocSoc5Osik1Vvn_Fd58YRIDpoPdnV7jnbFvAmkfD8wvC74H1g39Blt7YhQ1HjNRUOMDtQV77zIS16SjU6IhcR9-rHNQSLLnF0DGtJ7K6ahPMWMrBJujkhxRvCrF4rvfVrMptCf81abODfaPhjdSX1x2aEalETP2MEQO-E4hSZQLeDsCrC0xbC5mdBHDCo1dMZaafWV6sS-KDPJdzvYJs6--DmmammShAeG'
 
-type FormStatus = 'idle' | 'sending' | 'success'
+type FormStatus = 'idle' | 'sending' | 'success' | 'error'
 
 function BookingForm({ compact = false }: { compact?: boolean }) {
   const [status, setStatus] = useState<FormStatus>('idle')
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     const form = event.currentTarget
-    setStatus('sending')
+    const formData = new FormData(form)
 
+    const fullName = String(formData.get('name') ?? '').trim()
+    const phone = String(formData.get('phone') ?? '').trim()
+    const profileStatus = String(formData.get('status') ?? '').trim()
+
+    setStatus('sending')
+    setErrorMessage(null)
+
+    const { error } = await submitLandingLead({
+      source: 'theprompt',
+      full_name: fullName,
+      phone,
+      profile_status: profileStatus,
+    })
+
+    if (error) {
+      setStatus('error')
+      setErrorMessage('Spot save nahi hui. Dobara try karo.')
+      return
+    }
+
+    setStatus('success')
     window.setTimeout(() => {
-      setStatus('success')
-      window.setTimeout(() => {
-        form.reset()
-        setStatus('idle')
-      }, 3000)
-    }, 1500)
+      form.reset()
+      setStatus('idle')
+      setErrorMessage(null)
+    }, 3000)
   }
 
   const inputClass =
@@ -101,12 +122,16 @@ function BookingForm({ compact = false }: { compact?: boolean }) {
       ? 'Sending…'
       : status === 'success'
         ? 'Done — check WhatsApp'
-        : 'Book my demo seat'
+        : status === 'error'
+          ? 'Try again'
+          : 'Book my demo seat'
 
   const buttonClass =
     status === 'success'
       ? 'rounded-lg bg-success py-3 text-body-lg font-semibold text-on-success transition-opacity disabled:opacity-70'
-      : 'rounded-lg bg-accent py-3 text-body-lg font-semibold text-on-accent transition-opacity hover:opacity-90 disabled:opacity-70'
+      : status === 'error'
+        ? 'rounded-lg bg-accent py-3 text-body-lg font-semibold text-on-accent transition-opacity hover:opacity-90 disabled:opacity-70'
+        : 'rounded-lg bg-accent py-3 text-body-lg font-semibold text-on-accent transition-opacity hover:opacity-90 disabled:opacity-70'
 
   const fieldClass = 'flex flex-col gap-1.5'
 
@@ -125,7 +150,7 @@ function BookingForm({ compact = false }: { compact?: boolean }) {
             name="name"
             type="text"
             required
-            disabled={status !== 'idle'}
+            disabled={status === 'sending' || status === 'success'}
             placeholder="Apna full naam likhen"
             className={inputClass}
           />
@@ -143,7 +168,7 @@ function BookingForm({ compact = false }: { compact?: boolean }) {
             name="phone"
             type="tel"
             required
-            disabled={status !== 'idle'}
+            disabled={status === 'sending' || status === 'success'}
             placeholder="03xx xxxxxxx"
             className={inputClass}
           />
@@ -160,7 +185,7 @@ function BookingForm({ compact = false }: { compact?: boolean }) {
         <select
           id="status"
           name="status"
-          disabled={status !== 'idle'}
+          disabled={status === 'sending' || status === 'success'}
           className={inputClass}
         >
           <option>Student</option>
@@ -172,11 +197,17 @@ function BookingForm({ compact = false }: { compact?: boolean }) {
 
       <button
         type="submit"
-        disabled={status !== 'idle'}
+        disabled={status === 'sending' || status === 'success'}
         className={buttonClass}
       >
         {buttonLabel}
       </button>
+
+      {errorMessage && (
+        <p className="text-body-md text-error" role="alert">
+          {errorMessage}
+        </p>
+      )}
     </form>
   )
 }
